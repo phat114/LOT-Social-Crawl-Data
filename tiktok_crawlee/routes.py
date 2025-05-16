@@ -4,13 +4,6 @@ from crawlee.router import Router
 import mysql.connector
 from mysql.connector import Error
 
-MYSQL_CONFIG = {
-    'host': '',
-    'database': '',
-    'user': '',
-    'password': ''
-}
-
 router = Router[PlaywrightCrawlingContext]()
 
 @router.default_handler
@@ -57,6 +50,7 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
         share = await page.locator('strong[data-e2e="share-count"]').inner_text() or 'N/A'
         comment = await page.locator('strong[data-e2e="comment-count"]').inner_text() or 'N/A'
         bookmark = await page.locator('strong[data-e2e="undefined-count"]').inner_text() or 'N/A'
+
         try:
             sql_tracking = """INSERT INTO tracking_history 
             (`social_name`, `social_url`, `social_unique_id`, `author`, `publish_time`, `description`, `like`, `share`, `comment`, `bookmark`, crawl_date)
