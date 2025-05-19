@@ -1,5 +1,10 @@
+from urllib.parse import parse_qs, urlparse, urlencode, urlunparse
+
+from apify import Actor
 from camoufox import AsyncNewBrowser
+from crawlee import ConcurrencySettings
 from crawlee._utils.context import ensure_context
+from crawlee.storages import Dataset
 from typing_extensions import override
 from crawlee.browsers import (
     BrowserPool,
@@ -12,8 +17,10 @@ from crawlee.fingerprint_suite import (
     ScreenOptions,
 )
 from crawlee.router import Router
-from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
-
+from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext, ParselCrawler
+from datetime import timedelta
+from crawlee.request_loaders import RequestList
+from helper import parse_abbreviated_number,update_data,append_query_param
 crawler_router  = Router[PlaywrightCrawlingContext]()
 
 facebook_reactions = [
@@ -26,6 +33,7 @@ facebook_reactions = [
     "angry"
 ]
 
+facebook_crawled = []
 
 async def get_deepest_info(locator):
     if locator is None:
@@ -48,20 +56,7 @@ async def get_deepest_info(locator):
     except Exception as e:
         print(f"⚠️ Lỗi trong get_deepest_info: {e}")
         return ''
-def parse_abbreviated_number(s: str) -> int:
-    s = s.strip().upper().replace(',', '')
-    try:
-        if s.endswith('K'):
-            return int(float(s[:-1]) * 1_000)
-        elif s.endswith('M'):
-            return int(float(s[:-1]) * 1_000_000)
-        elif s.endswith('B'):
-            return int(float(s[:-1]) * 1_000_000_000)
-        else:
-            return int(float(s))
-    except (ValueError, TypeError) as e:
-        print(f"⚠️ Lỗi khi chuyển '{s}' thành số: {e}")
-        return 0
+
 
 class CamoufoxPlugin(PlaywrightBrowserPlugin):
     """Example browser plugin that uses Camoufox Browser, but otherwise keeps the functionality of
@@ -93,138 +88,213 @@ class CamoufoxPlugin(PlaywrightBrowserPlugin):
 @crawler_router.default_handler
 async def default_handler(context: PlaywrightCrawlingContext) -> None:
     try:
-        print(dir(context.page))
+        await context.page.mouse.move(200, 300)
+        await context.page.mouse.wheel(0, 1000)
+        await context.page.wait_for_timeout(2000 )
+        # Init giá trị
+        title = ''
+        total_plays = total_share = total_comment = total_reactions = 0
 
-        # Kiểm tra xem context.page có phương thức emulate_media không
+        # Emulate media nếu có
         if hasattr(context.page, 'emulate_media'):
             try:
-                # Thiết lập các thuộc tính hợp lệ
                 await context.page.emulate_media(
-                    color_scheme="dark",  # Chế độ màu tối
-                    reduced_motion="no-preference"  # Không giảm chuyển động
+                    color_scheme="dark",
+                    reduced_motion="no-preference"
                 )
-                print("Đã thiết lập emulate_media.")
+                print("✅ Đã thiết lập emulate_media.")
             except Exception as e:
-                # In lỗi nếu có bất kỳ sự cố nào khi thiết lập emulate_media
-                print(f"❌ Lỗi khi gọi emulate_media: {e}")
+                print(f"❌ emulate_media lỗi: {e}")
         else:
-            # Nếu không có phương thức emulate_media, sử dụng headers tùy chỉnh
             await context.page.set_extra_http_headers({"User-Agent": "my-custom-agent"})
-            print("❌ Phương thức set_emulated_media không tồn tại trên context.page.")
-        reaction_arr = []
-        title = ''
-        total_plays = 0
-        total_share = 0
-        print(context.page.url.find("embed_post"),context.page.url)
-        if(context.page.url.find("videos") != -1):
-            #lấy reaction
-            reaction_toolbar = await context.page.query_selector(f'div[data-pagelet="WatchPermalinkVideo"] ~ div > div:last-child span[role="toolbar"] ~ div[role="button"]')
-            total_reactions = await get_deepest_info(reaction_toolbar)
-            total_reactions = parse_abbreviated_number(total_reactions)
 
-            # lấy số comment
-            comment_locator = await context.page.query_selector(f'div[data-pagelet="WatchPermalinkVideo"] ~ div > div:last-child .html-span div[role="button"] span[dir="auto"]')
-            total_comment = await get_deepest_info(comment_locator)
-            total_comment = parse_abbreviated_number(total_comment.replace("comments", "").strip())
+        url = context.page.url
+        query = parse_qs(urlparse(url).query)
+        post_id = query.get("post_id", [None])[0]
+        # 📌 1. VIDEO PAGE
+        if "videos" in url:
+            await context.page.wait_for_selector('div[data-pagelet="WatchPermalinkVideo"]')
 
-            #lấy lượt xem
-            parent_plays_locator = await comment_locator.evaluate_handle('''el => {
-                let parent = el;
-                let count = 0;
-                while (parent && count < 3) {
-                    parent = parent.parentElement;
-                    if (parent?.tagName === 'DIV') count++;
-                    if (count === 2) return parent;
-                }
-                return null;
-            }''')
-            plays_locator = await parent_plays_locator.evaluate_handle('''el => {
-                    let sibling = el.nextElementSibling;
-                    while (sibling) {
-                        if (sibling.tagName === 'SPAN') return sibling;
-                        sibling = sibling.nextElementSibling;
+            wrap_sel = 'div[data-pagelet="WatchPermalinkVideo"] ~ div > div:last-child'
+
+            reaction_toolbar = await context.page.query_selector(f'{wrap_sel} span[role="toolbar"] ~ div[role="button"]')
+            if reaction_toolbar:
+                total_reactions = parse_abbreviated_number(await get_deepest_info(reaction_toolbar))
+
+            comment_locator = await context.page.query_selector(f'{wrap_sel} .html-span div[role="button"] span[dir="auto"]')
+            if comment_locator:
+                total_comment = parse_abbreviated_number(
+                    (await get_deepest_info(comment_locator)).replace("comments", "").strip()
+                )
+
+                # Plays
+                parent_plays_locator = await comment_locator.evaluate_handle('''el => {
+                    let parent = el;
+                    let count = 0;
+                    while (parent && count < 3) {
+                        parent = parent.parentElement;
+                        if (parent?.tagName === 'DIV') count++;
+                        if (count === 2) return parent;
                     }
                     return null;
                 }''')
-            total_plays = await get_deepest_info(plays_locator)
-            total_plays = parse_abbreviated_number(total_plays.replace("plays", "").strip())
 
-            #lấy title
-            title = await context.page.title()
-            if title:
-                title = title.split('|')[0].strip()
-        elif (context.page.url.find("embed_post") != -1 ):
+                if parent_plays_locator:
+                    plays_locator = await parent_plays_locator.evaluate_handle('''el => {
+                        let sibling = el.nextElementSibling;
+                        while (sibling) {
+                            if (sibling.tagName === 'SPAN') return sibling;
+                            sibling = sibling.nextElementSibling;
+                        }
+                        return null;
+                    }''')
+                    if plays_locator:
+                        total_plays = parse_abbreviated_number(
+                            (await get_deepest_info(plays_locator)).replace("plays", "").strip()
+                        )
+
+            title = (await context.page.title()).split('|')[0].strip()
+
+        # 📌 2. EMBED PAGE
+        elif "embed_post" in url:
+            await context.page.wait_for_selector('div[aria-posinset="1"]')
             wrap_element = await context.page.query_selector('div[aria-posinset="1"] div[data-visualcompletion="ignore-dynamic"]')
-            if(wrap_element):
+
+            if wrap_element:
                 reaction_locator = await wrap_element.query_selector('span[aria-hidden="true"]')
-                total_reactions = await get_deepest_info(reaction_locator)
-                total_reactions = parse_abbreviated_number(total_reactions)
+                if reaction_locator:
+                    total_reactions = parse_abbreviated_number(await get_deepest_info(reaction_locator))
+
                 comment_locator = await wrap_element.query_selector('div[aria-expanded="true"]')
-                total_comment = await get_deepest_info(comment_locator)
-                total_comment = parse_abbreviated_number(total_comment.replace("comments", "").strip())
-                share_locator = await comment_locator.evaluate_handle('''el => {
-                let parent = el;
-                let count = 0;
-                while (parent && count < 3) {
-                    parent = parent.parentElement;
-                    if (parent?.tagName === 'DIV') count++;
-                    if (count === 2) return parent.nextElementSibling;
-                }
-                return null;
-            }''')
-                total_share = await get_deepest_info(share_locator)
-                total_share = parse_abbreviated_number(total_share.replace('shares', "").strip())
+                if comment_locator:
+                    total_comment = parse_abbreviated_number(
+                        (await get_deepest_info(comment_locator)).replace("comments", "").strip()
+                    )
+
+                    share_locator = await comment_locator.evaluate_handle('''el => {
+                        let parent = el.parentElement;
+                        while (parent) {
+                            if (parent?.tagName === 'DIV') return parent.nextElementSibling;
+                            parent = parent.parentElement;
+                        }
+                        return null;
+                    }''')
+                    if share_locator:
+                        total_share = parse_abbreviated_number(
+                            (await get_deepest_info(share_locator)).replace('shares', "").strip()
+                        )
+
+                title = await context.page.eval_on_selector(
+                    'meta[name="description"]', 'el => el.getAttribute("content")'
+                )
+
+        # 📌 3. REELS PAGE
+        elif "reel" in url:
+            await context.page.wait_for_selector('div[data-pagelet="Reels"]')
+
+            # Like
+            like = await context.page.query_selector('div[aria-label="Like"]')
+            if like:
+                like_next = await like.evaluate_handle('el => el.parentElement.nextSibling')
+                if like_next:
+                    total_reactions = parse_abbreviated_number(await get_deepest_info(like_next))
+
+            # Comment
+            comment = await context.page.query_selector('div[aria-label="Comment"]')
+            if comment:
+                comment_next = await comment.evaluate_handle('el => el.parentElement.nextSibling')
+                if comment_next:
+                    total_comment = parse_abbreviated_number(await get_deepest_info(comment_next))
+
+            # Share
+            share = await context.page.query_selector('div[aria-label="Share"]')
+            if share:
+                share_next = await share.evaluate_handle('el => el.parentElement.nextSibling')
+                if share_next:
+                    total_share = parse_abbreviated_number(await get_deepest_info(share_next))
+
+            title = await context.page.eval_on_selector(
+                'link[rel="alternate"][type="application/json+oembed"]', 'el => el.getAttribute("title")'
+            )
+            if title:
+                title= title.split('|')[0].strip()
+        # 📌 4. OTHER POSTS
         else:
-            reaction_toolbar = await context.page.query_selector(f'div[role="complementary"] span[role="toolbar"] ~ span[aria-hidden="true"]')
-            # lấy số reaction
+            await context.page.wait_for_selector('div[role="complementary"]')
+            reaction_toolbar = await context.page.query_selector(
+                'div[role="complementary"] span[role="toolbar"] ~ span[aria-hidden="true"]'
+            )
+            if reaction_toolbar:
+                total_reactions = parse_abbreviated_number(await get_deepest_info(reaction_toolbar))
 
-            total_reactions = await get_deepest_info(reaction_toolbar)
+            comment_locator = await context.page.query_selector(
+                'div[role="complementary"] .html-span div[role="button"] span[dir="auto"]'
+            )
+            if comment_locator:
+                total_comment = parse_abbreviated_number(await get_deepest_info(comment_locator))
 
-            # lấy số comment
-            comment_locator = await context.page.query_selector(f'div[role="complementary"] .html-span div[role="button"] span[dir="auto"]')
-            total_comment = await get_deepest_info(comment_locator)
+        await context.push_data({
+            "id": post_id,
+            # "post_title": title,
+            "likes": total_reactions,
+            "comments": total_comment,
+            "shares": total_share,
+            "views": total_plays,
+            "bookmarks": 0,
+        })
 
-        # for x in facebook_reactions:
-        #     reaction_locator = await context.page.query_selector(f'div[aria-label*="{x.capitalize()}"]')
-        #     if reaction_locator:
-        #         reaction_aria = await reaction_locator.get_attribute('aria-label')
-        #         if reaction_aria:
-        #             # Remove label text and extract integer
-        #             reaction = int(
-        #                 parse_abbreviated_number(reaction_aria.replace(f'{x.capitalize()}:', '').replace("people", '').strip())
-        #             )
-        #             print(reaction)
-        #
-        #             reaction_arr.append({x: reaction})
-        #         else:
-        #             print(f"Aria-label not found for {x}")
-        #             reaction_arr.append({x: 0})
-        #     else:
-        #         print(f"Reaction element not found for {x}")
-        #         reaction_arr.append({x: 0})
-        print(f"Tổng số reaction: {total_reactions}")
-        print(f"Tổng số comment: {total_comment}")
-        print(f"Tổng số play: {total_plays}")
-        print(f"title: {title}")
-        print(f"Tổng số share: {total_share}")
+        # ✅ Xuất kết quả
+        print(f"📌 Title: {title}")
+        print(f"❤️ Total reactions: {total_reactions}")
+        print(f"💬 Total comments: {total_comment}")
+        print(f"🔁 Total shares: {total_share}")
+        print(f"▶️ Total plays: {total_plays}")
+        # await context.enqueue_links()
     except Exception as e:
         print(f"❌ Lỗi xảy ra trong handler: {e}")
 
-async def main() -> None:
-    # async with Actor:
-    # proxy_configuration = ProxyConfiguration(
-    #     proxy_urls=[
-    #         # "http://1003ge0i4m:1003ge0i4m@157.15.109.145:44589",
-    # )
-    crawler = PlaywrightCrawler(
-        # proxy_configuration = proxy_configuration,
-        max_requests_per_crawl=1,
-        # Provide our router instance to the crawler.
-        request_handler=crawler_router,
-        browser_pool=BrowserPool(plugins=[CamoufoxPlugin()]),
-        # browser_type = "chromium",
-        # headless=False,
-        # fingerprint_generator = fingerprint_generator
-    )
-    await crawler.run(['https://www.facebook.com/maohievan/posts/1978863362556695?ref=embed_post'])
-    # await crawler.run(['https://www.facebook.com/photo/?fbid=4184754011769858&set=a.1378621109049843'])
+
+
+async def main(data) -> None:
+    urls = [
+        append_query_param(i["post_url"], "post_id", str(i["id"]))
+        for i in data
+    ]
+    async with Actor:
+        # proxy_configuration = ProxyConfiguration(
+        #     proxy_urls=[
+        #         # "http://1003ge0i4m:1003ge0i4m@157.15.109.145:44589",
+        # )
+        request_list = RequestList(urls)
+        request_manager = await request_list.to_tandem()
+        concurrency_settings = ConcurrencySettings(
+            min_concurrency=1,
+            max_concurrency=1,
+        )
+        crawler = PlaywrightCrawler(
+            # proxy_configuration = proxy_configuration,
+            # max_requests_per_crawl=1,
+            # Provide our router instance to the crawler.
+            request_manager=request_manager,
+            browser_pool=BrowserPool(plugins=[CamoufoxPlugin()]),
+            request_handler=crawler_router,
+            concurrency_settings = concurrency_settings
+            # browser_new_context_options={
+            #         'color_scheme': 'dark',
+            #         # Set headers
+            #         'extra_http_headers': {
+            #             'Custom-Header': 'my-header',
+            #             'Accept-Language': 'en',
+            #         },
+            #         # Set only User Agent
+            #         'user_agent': 'My-User-Agent',
+            #     },
+            # browser_type = "chromium",
+            # headless=False,
+            # fingerprint_generator = fingerprint_generator
+        )
+        await crawler.run()
+        crawler_data = await crawler.get_data()
+        items = crawler_data.items
+        await update_data(items)
+        # await crawler.run(['https://www.facebook.com/photo/?fbid=4184754011769858&set=a.1378621109049843'])

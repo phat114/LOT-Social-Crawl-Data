@@ -1,3 +1,5 @@
+from urllib.parse import parse_qs, urlparse
+
 from crawlee.crawlers import PlaywrightCrawlingContext
 from crawlee.router import Router
 # from mysql.connector import Error
@@ -23,6 +25,9 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
 
     try:
         await page.wait_for_selector('span[data-e2e="browse-username"]', timeout=10000)
+        url = context.page.url
+        query = parse_qs(urlparse(url).query)
+        post_id = query.get("post_id", [None])[0]
 
         # Dom to get social info
         social_name = 'tiktok'
@@ -51,48 +56,57 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
         comment = await page.locator('strong[data-e2e="comment-count"]').inner_text() or 'N/A'
         bookmark = await page.locator('strong[data-e2e="undefined-count"]').inner_text() or 'N/A'
 
-        try:
-            sql_tracking = """INSERT INTO tracking_history 
-            (`social_name`, `social_url`, `social_unique_id`, `author`, `publish_time`, `description`, `like`, `share`, `comment`, `bookmark`, crawl_date)
-            VALUES (%s, %s , %s, %s, %s, %s, %s, %s, %s, %s, CURDATE())"""
-            
-            cursor.execute(sql_tracking, (social_name, social_url, social_unique_id, author, publish_time, description, like, share, comment, bookmark,))
-            log_id = cursor.lastrowid
-
-            # Check if record exists in real_time_data
-            sql_check = """SELECT COUNT(*) FROM real_time_data 
-                WHERE social_name = %s AND social_unique_id = %s"""
-            cursor.execute(sql_check, (social_name, social_unique_id))
-            record_exists = cursor.fetchone()[0] > 0
-
-            if record_exists:
-                # Update existing record in real_time_data
-                sql_update = """UPDATE real_time_data 
-                    SET social_url = %s, author = %s, publish_time = %s, description = %s, 
-                        `like` = %s, `share` = %s, `comment` = %s, `bookmark` = %s, `log_id` = %s, last_update_at = CURDATE()
-                    WHERE social_name = %s AND social_unique_id = %s"""
-                cursor.execute(sql_update, (social_url, author, publish_time, description, like, share, comment, bookmark, log_id, social_name, social_unique_id))
-                log.info(f"Updated record in real_time_data for {social_name}/{social_unique_id}")
-            else:
-                # Insert new record into real_time_data
-                sql_insert = """INSERT INTO real_time_data 
-                    (`social_name`, `social_url`, `social_unique_id`, `author`, `publish_time`, `description`, `like`, `share`, `comment`, `bookmark`, `log_id`, `last_update_at`)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURDATE())"""
-                cursor.execute(sql_insert, (social_name, social_url, social_unique_id, author, publish_time, description, like, share, comment, bookmark, log_id,))
-                log.info(f"Inserted new record into real_time_data for {social_name}/{social_unique_id}")
-
-            connection.commit()
-        except Error as e:
-            context.log.error(f'MySQL error: {e}')
-            sql_error = """INSERT INTO tracking_history 
-                    (`social_url`, `status`, `error_message`, `crawl_date`)
-                    VALUES (%s, %s, %s, CURDATE())"""
-            cursor.execute(sql_error, (context.request.url, 0, str(e)))
-            connection.commit()
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
+        await context.push_data({
+            "id": post_id,
+            # "post_title": title,
+            "likes": like,
+            "comments": comment,
+            "shares": share,
+            "views": 0,
+            "bookmarks": bookmark,
+        })
+        # try:
+        #     sql_tracking = """INSERT INTO tracking_history
+        #     (`social_name`, `social_url`, `social_unique_id`, `author`, `publish_time`, `description`, `like`, `share`, `comment`, `bookmark`, crawl_date)
+        #     VALUES (%s, %s , %s, %s, %s, %s, %s, %s, %s, %s, CURDATE())"""
+        #
+        #     cursor.execute(sql_tracking, (social_name, social_url, social_unique_id, author, publish_time, description, like, share, comment, bookmark,))
+        #     log_id = cursor.lastrowid
+        #
+        #     # Check if record exists in real_time_data
+        #     sql_check = """SELECT COUNT(*) FROM real_time_data
+        #         WHERE social_name = %s AND social_unique_id = %s"""
+        #     cursor.execute(sql_check, (social_name, social_unique_id))
+        #     record_exists = cursor.fetchone()[0] > 0
+        #
+        #     if record_exists:
+        #         # Update existing record in real_time_data
+        #         sql_update = """UPDATE real_time_data
+        #             SET social_url = %s, author = %s, publish_time = %s, description = %s,
+        #                 `like` = %s, `share` = %s, `comment` = %s, `bookmark` = %s, `log_id` = %s, last_update_at = CURDATE()
+        #             WHERE social_name = %s AND social_unique_id = %s"""
+        #         cursor.execute(sql_update, (social_url, author, publish_time, description, like, share, comment, bookmark, log_id, social_name, social_unique_id))
+        #         log.info(f"Updated record in real_time_data for {social_name}/{social_unique_id}")
+        #     else:
+        #         # Insert new record into real_time_data
+        #         sql_insert = """INSERT INTO real_time_data
+        #             (`social_name`, `social_url`, `social_unique_id`, `author`, `publish_time`, `description`, `like`, `share`, `comment`, `bookmark`, `log_id`, `last_update_at`)
+        #             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURDATE())"""
+        #         cursor.execute(sql_insert, (social_name, social_url, social_unique_id, author, publish_time, description, like, share, comment, bookmark, log_id,))
+        #         log.info(f"Inserted new record into real_time_data for {social_name}/{social_unique_id}")
+        #
+        #     connection.commit()
+        # except Error as e:
+        #     context.log.error(f'MySQL error: {e}')
+        #     sql_error = """INSERT INTO tracking_history
+        #             (`social_url`, `status`, `error_message`, `crawl_date`)
+        #             VALUES (%s, %s, %s, CURDATE())"""
+        #     cursor.execute(sql_error, (context.request.url, 0, str(e)))
+        #     connection.commit()
+        # finally:
+        #     if connection.is_connected():
+        #         cursor.close()
+        #         connection.close()
 
         # Log kết quả
 

@@ -1,0 +1,23 @@
+{
+  "id": "Kf7aNCMqctuogfa",
+  "unique_key": "https://www.facebook.com/photo?fbid=1265160894966301&locale=vi_vn&set=pcb.1265161018299622",
+  "order_no": null,
+  "handled_at": "2025-05-19 07:25:22.656074+00:00",
+  "request": {
+    "url": "https://www.facebook.com/photo/?fbid=1265160894966301&set=pcb.1265161018299622&locale=vi_VN",
+    "method": "GET",
+    "headers": {},
+    "payload": null,
+    "user_data": {
+      "__crawlee": {
+        "state": 3
+      }
+    },
+    "retry_count": 0,
+    "no_retry": false,
+    "loaded_url": "https://www.facebook.com/photo/?fbid=1265160894966301&set=pcb.1265161018299622&locale=vi_VN",
+    "handled_at": "2025-05-19 07:25:22.656074+00:00",
+    "unique_key": "https://www.facebook.com/photo?fbid=1265160894966301&locale=vi_vn&set=pcb.1265161018299622",
+    "id": "Kf7aNCMqctuogfa"
+  }
+}
