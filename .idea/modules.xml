@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/LOT-Social-Crawl-Data.iml" filepath="$PROJECT_DIR$/.idea/LOT-Social-Crawl-Data.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/lot_social_crawl_data.iml" filepath="$PROJECT_DIR$/.idea/lot_social_crawl_data.iml" />
     </modules>
   </component>
 </project>

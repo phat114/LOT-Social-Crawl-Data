@@ -1,0 +1,9 @@
+/start.bat
+/storage
+/tiktok_crawlee/storage
+/facebook_crawlee/storage
+/backup
+/connection.py
+.venv
+/logs
+crawler_log.txt

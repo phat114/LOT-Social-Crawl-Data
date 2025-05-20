@@ -1,8 +1,8 @@
 {
   "id": "mq1b78Prik5yvJE",
   "unique_key": "https://www.facebook.com/photo?fbid=1265160894966301&locale=vi_vn&post_id=1&set=pcb.1265161018299622",
-  "order_no": "1747734729441.112000",
-  "handled_at": null,
+  "order_no": null,
+  "handled_at": "2025-05-20 11:22:14.442799+00:00",
   "request": {
     "url": "https://www.facebook.com/photo/?fbid=1265160894966301&set=pcb.1265161018299622&locale=vi_VN&post_id=1",
     "method": "GET",
@@ -13,10 +13,10 @@
         "state": 5
       }
     },
-    "retry_count": 1,
+    "retry_count": 2,
     "no_retry": false,
     "loaded_url": null,
-    "handled_at": null,
+    "handled_at": "2025-05-20 11:22:14.442799+00:00",
     "unique_key": "https://www.facebook.com/photo?fbid=1265160894966301&locale=vi_vn&post_id=1&set=pcb.1265161018299622",
     "id": "mq1b78Prik5yvJE"
   }
