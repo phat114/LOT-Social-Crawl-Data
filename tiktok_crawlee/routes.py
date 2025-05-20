@@ -5,6 +5,7 @@ from crawlee.router import Router
 # from mysql.connector import Error
 import mysql.connector
 from mysql.connector import Error
+from helper import is_positive_number
 
 router = Router[PlaywrightCrawlingContext]()
 
@@ -13,22 +14,15 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
     """Default request handler."""
     log = context.log
     page = context.page
-
-    connection = mysql.connector.connect(
-        host="",
-        user="",
-        password="",
-        database=""
-    )
-
-    cursor = connection.cursor()
-
     try:
+        await context.page.mouse.move(200, 300)
+        await context.page.mouse.wheel(0, 1000)
+        await context.page.wait_for_timeout(2000)
         await page.wait_for_selector('span[data-e2e="browse-username"]', timeout=10000)
         url = context.page.url
         query = parse_qs(urlparse(url).query)
         post_id = query.get("post_id", [None])[0]
-
+        print(post_id)
         # Dom to get social info
         social_name = 'tiktok'
         social_url = context.request.url
@@ -61,7 +55,7 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
             # "post_title": title,
             "likes": like,
             "comments": comment,
-            "shares": share,
+            "shares": share if is_positive_number(share) else 0,
             "views": 0,
             "bookmarks": bookmark,
         })
@@ -112,15 +106,15 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
 
     except Exception as e:
         log.error(f'Error scraping {context.request.url}: {e}')
-        try:
-            sql_error = """INSERT INTO tracking_history 
-                (`social_url`, `status`, `error_message`, `crawl_date`)
-                VALUES (%s, %s, %s, CURDATE())"""
-            cursor.execute(sql_error, (context.request.url, 0, str(e)))
-            connection.commit()
-        except Error as db_err:
-            log.error(f'MySQL error while logging error: {db_err}')
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
+        # try:
+        #     sql_error = """INSERT INTO tracking_history
+        #         (`social_url`, `status`, `error_message`, `crawl_date`)
+        #         VALUES (%s, %s, %s, CURDATE())"""
+        #     cursor.execute(sql_error, (context.request.url, 0, str(e)))
+        #     connection.commit()
+        # except Error as db_err:
+        #     log.error(f'MySQL error while logging error: {db_err}')
+        # finally:
+        #     if connection.is_connected():
+        #         cursor.close()
+        #         connection.close()

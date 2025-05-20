@@ -9,8 +9,8 @@ from datetime import timedelta
 
 async def main(data) -> None:
     # This is a demo link. Fetch links from your database.
-
-    async with Actor:
+    try:
+        # async with Actor:
         urls = [
             append_query_param(i["post_url"], "post_id", str(i["id"]))
             for i in data
@@ -28,7 +28,7 @@ async def main(data) -> None:
             headless=False,
             max_requests_per_crawl=1,
             http_client=HttpxHttpClient(),
-            browser_type="firefox",
+            browser_type="chromium",
             browser_new_context_options={"permissions": []},
             request_handler_timeout=timedelta(seconds=120),
             request_manager=request_manager
@@ -40,3 +40,5 @@ async def main(data) -> None:
         print(crawler_data,'tiktok_crawlee')
         items = crawler_data.items
         await update_data(items)
+    except Exception as e:
+        print(f"❌ Lỗi: {e}")

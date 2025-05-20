@@ -4,6 +4,7 @@ from apify import Actor
 from camoufox import AsyncNewBrowser
 from crawlee import ConcurrencySettings
 from crawlee._utils.context import ensure_context
+from crawlee.http_clients import HttpxHttpClient
 from crawlee.storages import Dataset
 from typing_extensions import override
 from crawlee.browsers import (
@@ -260,41 +261,43 @@ async def main(data) -> None:
         append_query_param(i["post_url"], "post_id", str(i["id"]))
         for i in data
     ]
-    async with Actor:
-        # proxy_configuration = ProxyConfiguration(
-        #     proxy_urls=[
-        #         # "http://1003ge0i4m:1003ge0i4m@157.15.109.145:44589",
-        # )
-        request_list = RequestList(urls)
-        request_manager = await request_list.to_tandem()
-        concurrency_settings = ConcurrencySettings(
-            min_concurrency=1,
-            max_concurrency=1,
-        )
-        crawler = PlaywrightCrawler(
-            # proxy_configuration = proxy_configuration,
-            # max_requests_per_crawl=1,
-            # Provide our router instance to the crawler.
-            request_manager=request_manager,
-            browser_pool=BrowserPool(plugins=[CamoufoxPlugin()]),
-            request_handler=crawler_router,
-            concurrency_settings = concurrency_settings
-            # browser_new_context_options={
-            #         'color_scheme': 'dark',
-            #         # Set headers
-            #         'extra_http_headers': {
-            #             'Custom-Header': 'my-header',
-            #             'Accept-Language': 'en',
-            #         },
-            #         # Set only User Agent
-            #         'user_agent': 'My-User-Agent',
-            #     },
-            # browser_type = "chromium",
-            # headless=False,
-            # fingerprint_generator = fingerprint_generator
-        )
-        await crawler.run()
-        crawler_data = await crawler.get_data()
-        items = crawler_data.items
-        await update_data(items)
-        # await crawler.run(['https://www.facebook.com/photo/?fbid=4184754011769858&set=a.1378621109049843'])
+    # async with Actor:
+    # proxy_configuration = ProxyConfiguration(
+    #     proxy_urls=[
+    #         # "http://1003ge0i4m:1003ge0i4m@157.15.109.145:44589",
+    # )
+    request_list = RequestList(urls)
+    request_manager = await request_list.to_tandem()
+    concurrency_settings = ConcurrencySettings(
+        min_concurrency=1,
+        max_concurrency=1,
+    )
+    crawler = PlaywrightCrawler(
+        # proxy_configuration = proxy_configuration,
+        # max_requests_per_crawl=1,
+        # Provide our router instance to the crawler.
+        request_manager=request_manager,
+        browser_pool=BrowserPool(plugins=[CamoufoxPlugin()]),
+        request_handler=crawler_router,
+        concurrency_settings = concurrency_settings,
+        request_handler_timeout=timedelta(seconds=120),
+        http_client=HttpxHttpClient(),
+
+        # browser_new_context_options={
+        #         'color_scheme': 'dark',
+        #         # Set headers
+        #         'extra_http_headers': {
+        #             'Custom-Header': 'my-header',
+        #             'Accept-Language': 'en',
+        #         },
+        #         # Set only User Agent
+        #         'user_agent': 'My-User-Agent',
+        #     },
+        # browser_type = "chromium",
+        # headless=False,
+        # fingerprint_generator = fingerprint_generator
+    )
+    await crawler.run()
+    crawler_data = await crawler.get_data()
+    items = crawler_data.items
+    await update_data(items)

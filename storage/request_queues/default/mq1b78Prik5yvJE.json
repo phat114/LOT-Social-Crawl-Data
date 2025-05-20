@@ -2,7 +2,7 @@
   "id": "mq1b78Prik5yvJE",
   "unique_key": "https://www.facebook.com/photo?fbid=1265160894966301&locale=vi_vn&post_id=1&set=pcb.1265161018299622",
   "order_no": null,
-  "handled_at": "2025-05-19 11:39:48.404083+00:00",
+  "handled_at": "2025-05-20 04:57:24.618932+00:00",
   "request": {
     "url": "https://www.facebook.com/photo/?fbid=1265160894966301&set=pcb.1265161018299622&locale=vi_VN&post_id=1",
     "method": "GET",
@@ -16,7 +16,7 @@
     "retry_count": 0,
     "no_retry": false,
     "loaded_url": "https://www.facebook.com/photo/?fbid=1265160894966301&set=pcb.1265161018299622&locale=vi_VN&post_id=1",
-    "handled_at": "2025-05-19 11:39:48.404083+00:00",
+    "handled_at": "2025-05-20 04:57:24.618932+00:00",
     "unique_key": "https://www.facebook.com/photo?fbid=1265160894966301&locale=vi_vn&post_id=1&set=pcb.1265161018299622",
     "id": "mq1b78Prik5yvJE"
   }

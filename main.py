@@ -1,12 +1,16 @@
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from crawlee.crawlers import PlaywrightCrawler
 
 from connection import create_connection
-from facebook_crawlee.main import main as crawlee_facebook
-from tiktok_crawlee.main import main as crawlee_tiktok
+from helper import append_query_param, update_data
 
-
+from facebook_crawlee.routes import router as facebook_router
+from tiktok_crawlee.routes import router as tiktok_router
+from crawlee.http_clients import HttpxHttpClient
+from crawlee.request_loaders import RequestList
 
 def convert_datetime(obj):
     if isinstance(obj, datetime):
@@ -14,19 +18,46 @@ def convert_datetime(obj):
     return obj
 
 
-async def handle_crawling(platform,data):
-    print(f"Crawling {platform}...")
-    match platform:
-        case "facebook":
-            await  crawlee_facebook(data)
-            return None
-        case "tiktok":
-            await  crawlee_tiktok(data)
-            return None
-        case "youtube":
-            return platform
-        case _:
-            return []
+async def handle_crawling(platform, data):
+    try:
+        if platform == "facebook":
+            router = facebook_router
+        elif platform == "tiktok":
+            router = tiktok_router
+        else:
+            router = tiktok_router
+
+        # async with Actor:
+        urls = [
+            append_query_param(i["post_url"], "post_id", str(i["id"]))
+            for i in data
+        ]
+        # async with Actor:
+        # proxy_configuration = ProxyConfiguration(
+        #     proxy_urls=[
+        #         # "http://1003ge0i4m:1003ge0i4m@157.15.109.145:44589",
+        # )
+        request_list = RequestList(urls)
+        request_manager = await request_list.to_tandem()
+        crawler = PlaywrightCrawler(
+            request_handler=router,
+            # headless=True,
+            headless=False,
+            max_requests_per_crawl=1,
+            http_client=HttpxHttpClient(),
+            browser_type="chromium",
+            browser_new_context_options={"permissions": []},
+            request_handler_timeout=timedelta(seconds=120),
+            request_manager=request_manager
+        )
+
+        await crawler.run()
+        # crawler_data = await crawler.get_data()
+        # print(crawler_data, 'tiktok_crawlee')
+        # items = crawler_data.items
+        # await update_data(items)
+    except Exception as e:
+        print(f"❌ Lỗi: {e}")
 
 
 async def main():
@@ -50,7 +81,9 @@ async def main():
                 if platform in platform_map:
                     platform_map[platform].append(row)
             for platform in platform_map:
+                print(f"\n🚀 Crawling {platform.upper()}...")
                 await handle_crawling(platform, platform_map[platform])
+                print(f"✅ DONE: {platform.upper()}\n")
 
             with open("backup/posts_data.jsonl", "w", encoding="utf-8") as f:
                 json.dump(rows, f, ensure_ascii=False, indent=2)
