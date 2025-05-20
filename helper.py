@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from typing_extensions import override
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
@@ -15,6 +16,7 @@ from crawlee.http_clients import HttpxHttpClient
 from crawlee.request_loaders import RequestList
 
 from connection import create_connection
+from globals import result_queue
 
 
 def parse_abbreviated_number(s: str) -> int:
@@ -41,6 +43,14 @@ def is_positive_number(value):
         return False
 
 
+async def process_queue():
+    while True:
+        result = await result_queue.get()
+        if result is None:
+            break  # Kết thúc
+        print("📦 Xử lý kết quả:", result)
+        await update_data([result])
+
 async def update_data(data):
     conn = create_connection()
     cursor = conn.cursor()
@@ -58,13 +68,16 @@ async def update_data(data):
                         comments = CASE id {comments_case} END,
                         shares = CASE id {shares_case} END,
                         views = CASE id {views_case} END,
-                        bookmarks = CASE id {bookmarks_case} END
+                        bookmarks = CASE id {bookmarks_case} END,
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE id IN ({','.join(ids)});
                 """
         cursor.execute(query)
         conn.commit()
     except Exception as e:
         print(f"❌ Lỗi UPDATE: {e}")
+        logging.error(f"❌ Lỗi UPDATE: {e}", exc_info=True)
+
     finally:
         cursor.close()
         conn.close()

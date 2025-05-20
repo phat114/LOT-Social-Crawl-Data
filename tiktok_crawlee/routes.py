@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import parse_qs, urlparse
 
 from crawlee.crawlers import PlaywrightCrawlingContext
@@ -6,6 +7,7 @@ from crawlee.router import Router
 import mysql.connector
 from mysql.connector import Error
 from helper import is_positive_number
+from globals import result_queue
 
 router = Router[PlaywrightCrawlingContext]()
 
@@ -22,7 +24,6 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
         url = context.page.url
         query = parse_qs(urlparse(url).query)
         post_id = query.get("post_id", [None])[0]
-        print(post_id)
         # Dom to get social info
         social_name = 'tiktok'
         social_url = context.request.url
@@ -49,8 +50,7 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
         share = await page.locator('strong[data-e2e="share-count"]').inner_text() or 'N/A'
         comment = await page.locator('strong[data-e2e="comment-count"]').inner_text() or 'N/A'
         bookmark = await page.locator('strong[data-e2e="undefined-count"]').inner_text() or 'N/A'
-
-        await context.push_data({
+        result = {
             "id": post_id,
             # "post_title": title,
             "likes": like,
@@ -58,7 +58,9 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
             "shares": share if is_positive_number(share) else 0,
             "views": 0,
             "bookmarks": bookmark,
-        })
+        }
+        # await context.push_data(result)
+        await result_queue.put(result)
         # try:
         #     sql_tracking = """INSERT INTO tracking_history
         #     (`social_name`, `social_url`, `social_unique_id`, `author`, `publish_time`, `description`, `like`, `share`, `comment`, `bookmark`, crawl_date)
@@ -106,6 +108,8 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
 
     except Exception as e:
         log.error(f'Error scraping {context.request.url}: {e}')
+        logging.error(f"❌ Lỗi scrapping tiktok {context.request.url}: {e}", exc_info=True)
+
         # try:
         #     sql_error = """INSERT INTO tracking_history
         #         (`social_url`, `status`, `error_message`, `crawl_date`)

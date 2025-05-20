@@ -1,8 +1,8 @@
 {
   "id": "BJUn9Ko9rrRUzy5",
   "unique_key": "https://www.facebook.com/photo?fbid=4184754011769858&post_id=4",
-  "order_no": null,
-  "handled_at": "2025-05-20 04:57:24.800604+00:00",
+  "order_no": "1747734729431.112000",
+  "handled_at": null,
   "request": {
     "url": "https://www.facebook.com/photo/?fbid=4184754011769858&post_id=4",
     "method": "GET",
@@ -10,13 +10,13 @@
     "payload": null,
     "user_data": {
       "__crawlee": {
-        "state": 3
+        "state": 5
       }
     },
-    "retry_count": 0,
+    "retry_count": 2,
     "no_retry": false,
-    "loaded_url": "https://www.facebook.com/photo/?fbid=4184754011769858&post_id=4",
-    "handled_at": "2025-05-20 04:57:24.800604+00:00",
+    "loaded_url": null,
+    "handled_at": null,
     "unique_key": "https://www.facebook.com/photo?fbid=4184754011769858&post_id=4",
     "id": "BJUn9Ko9rrRUzy5"
   }

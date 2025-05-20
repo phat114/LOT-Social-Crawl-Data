@@ -1,9 +1,12 @@
+import logging
 from urllib.parse import parse_qs, urlparse, urlencode, urlunparse
 
 from crawlee.router import Router
 from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext, ParselCrawler
 
 from helper import parse_abbreviated_number
+from globals import result_queue
+
 router  = Router[PlaywrightCrawlingContext]()
 
 facebook_reactions = [
@@ -38,6 +41,8 @@ async def get_deepest_info(locator):
         return await deepest.inner_text()
     except Exception as e:
         print(f"⚠️ Lỗi trong get_deepest_info: {e}")
+        logging.error(f"⚠️ Lỗi trong get_deepest_info: {e}", exc_info=True)
+
         return ''
 
 @router.default_handler
@@ -188,7 +193,17 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
             if comment_locator:
                 total_comment = parse_abbreviated_number(await get_deepest_info(comment_locator))
 
-        await context.push_data({
+        # await context.push_data({
+        #     "id": post_id,
+        #     # "post_title": title,
+        #     "likes": total_reactions,
+        #     "comments": total_comment,
+        #     "shares": total_share,
+        #     "views": total_plays,
+        #     "bookmarks": 0,
+        # })
+
+        result = {
             "id": post_id,
             # "post_title": title,
             "likes": total_reactions,
@@ -196,7 +211,9 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
             "shares": total_share,
             "views": total_plays,
             "bookmarks": 0,
-        })
+        }
+        # await context.push_data(result)
+        await result_queue.put(result)
 
         # ✅ Xuất kết quả
         print(f"📌 Title: {title}")
@@ -206,4 +223,6 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
         print(f"▶️ Total plays: {total_plays}")
         # await context.enqueue_links()
     except Exception as e:
-        print(f"❌ Lỗi xảy ra trong handler: {e}")
+        print(f"❌ Lỗi scrapping facebook {context.request.url}: {e}")
+        logging.error(f"❌ Lỗi scrapping facebook {context.request.url}: {e}", exc_info=True)
+
