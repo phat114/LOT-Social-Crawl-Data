@@ -7,3 +7,6 @@
 .venv
 /logs
 crawler_log.txt
+/__pycache__
+/tiktok_crawlee/__pycache__
+/youtube/__pycache__
