@@ -1,25 +1,25 @@
-name: CI/CD on Linux
+name: Daily Job
 
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: "0 0 * * *"   # chạy mỗi ngày 00:00 UTC
+  workflow_dispatch:      # cho phép chạy tay
 
 jobs:
-  deploy:
+  run-daily:
     runs-on: self-hosted
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Setup Python env
+      - name: Setup Python
         run: |
           python3 -m venv venv
           source venv/bin/activate
           pip install -r requirements.txt
 
-      - name: Run app
+      - name: Run script
         run: |
           source venv/bin/activate
           python main.py
